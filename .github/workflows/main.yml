@@ -1,0 +1,30 @@
+name: Unfollow Non-Followers
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  unfollow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unfollow logic
+        env:
+          GH_TOKEN: ${{ secrets.UNFOLLOW_TOKEN }}
+          USER: ${{ github.repository_owner }}
+        run: |
+          gh api --paginate "/users/$USER/following" | jq -r '.[].login' | sort > following.txt
+
+          gh api --paginate "/users/$USER/followers" | jq -r '.[].login' | sort > followers.txt
+
+          grep -Fvx -f followers.txt following.txt > targets.txt || true
+
+          if [ -s targets.txt ]; then
+            echo "Unfollowing $(wc -l < targets.txt) users..."
+            while read -r target; do
+              echo "Unfollowing $target..."
+              gh api -X DELETE "/user/following/$target"
+            done < targets.txt
+          else
+            echo "No users to unfollow."
+          fi
